@@ -10,6 +10,8 @@ from rest_framework.test import APIClient
 
 CREATE_USER_URL = reverse("user:create")
 USER_TOKEN_URL = reverse("user:token")
+ME_URL = reverse("user:me")
+
 def create_user(**params):
     '''
     Create and return a  user
@@ -113,3 +115,42 @@ class PublicUserApiTests(TestCase):
 
         self.assertNotIn('token',res.data)
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+    
+    def test_retrieve_user_unauthorized(self):
+        '''Test that authentication is required for users'''
+        res = self.client.get(ME_URL)
+        self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
+
+class PrivateUserApiTests(TestCase):
+    def setUp(self):
+        self.user = create_user(
+            name='test user',
+            email='testuser@example.com',
+            password='testpassword1'
+        )
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
+    
+    def test_retrieve_user_authorized(self):
+        '''Test retrieving profile for logged in user'''
+        res = self.client.get(ME_URL)
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data['name'], self.user.name)
+        self.assertEqual(res.data['email'], self.user.email)
+    
+    def test_post_not_allowed_for_me_endpoint(self):
+        '''Test returning an error when the user tries to post on ME endpoint'''
+        res = self.client.post(ME_URL,{})
+        self.assertEqual(res.status_code,status.HTTP_405_METHOD_NOT_ALLOWED)
+    
+    def test_update_user_profile(self):
+        '''Test updating user info via ME endpoint '''
+        payload = {
+            'name':'newName',
+            'password':'newPassword',
+        }
+        res = self.client.patch(ME_URL,payload)
+        self.user.refresh_from_db()
+        self.assertEqual(res.status_code,status.HTTP_200_OK)
+        self.assertEqual(self.user.name, payload['name'])
+        self.assertTrue(self.user.check_password(payload['password']), payload['password'])
