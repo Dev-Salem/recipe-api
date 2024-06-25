@@ -9,7 +9,7 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 CREATE_USER_URL = reverse("user:create")
-
+USER_TOKEN_URL = reverse("user:token")
 def create_user(**params):
     '''
     Create and return a  user
@@ -57,3 +57,59 @@ class PublicUserApiTests(TestCase):
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
         user = get_user_model().objects.get(email=payload['email'])
         self.assertEqual(user.email, payload['email'])
+    
+    def test_create_toke_for_user(self):
+        ''''Test generate a toke when user sign in successfully'''
+        # register the user
+        user = {
+            'name':'Test User Name',
+            'email':'testy@example.co',
+            'password':'testpassword2'
+        }
+        create_user(**user)
+        #sign in the user using token endpoint
+        res = self.client.post(USER_TOKEN_URL,{
+            'email':user['email'],
+            'password':user['password']
+        })
+
+        #check if the result has token in it and it's 200
+        self.assertIn('token',res.data)
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+    
+    def test_return_error_when_sign_in_fail(self):
+        '''Test returning an error when user enters invalid credentials'''
+        # register the user
+        user = {
+            'name':'Test User Name',
+            'email':'testy@example.co',
+            'password':'testpassword2'
+        }
+        create_user(**user)
+        #try to sign in the user using token endpoint with invalid email
+        res = self.client.post(USER_TOKEN_URL,{
+            'email':'doesnotexit@example.com',
+            'password':user['password']
+        })
+
+        #check if the result does not have token in it and it's 400
+        self.assertNotIn('token',res.data)
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+    
+    def test_create_token_blank_password(self):
+        '''Test returning an error when user enters blank password'''
+        user = {
+            'name':'Test User Name',
+            'email':'testy@example.co',
+            'password':'testpassword2'
+        }
+        create_user(**user)
+        
+        payload ={
+            'email':user['email'],
+            'password':''
+        }
+        res = self.client.post(USER_TOKEN_URL,payload)
+
+        self.assertNotIn('token',res.data)
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
